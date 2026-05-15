@@ -16,6 +16,8 @@ import { GameService, Game, Bluff, Player } from './lib/gameService';
 import { onSnapshot, doc, collection, query } from 'firebase/firestore';
 import { db } from './lib/firebase';
 
+const LAST_GAME_KEY = 'bluffmaster_lastGameId';
+
 export default function App() {
   const [user, setUser] = useState(auth.currentUser);
   const [nameInput, setNameInput] = useState('');
@@ -28,6 +30,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedRounds, setSelectedRounds] = useState<1 | 3 | 5 | 10 | 15>(10);
+  const [savedGameId, setSavedGameId] = useState<string | null>(() => localStorage.getItem(LAST_GAME_KEY));
 
   useEffect(() => {
     return auth.onAuthStateChanged((u) => setUser(u));
@@ -104,6 +107,8 @@ export default function App() {
     setLoading(true);
     try {
       const id = await GameService.createGame(user.uid, user.displayName || 'Anonymous');
+      localStorage.setItem(LAST_GAME_KEY, id);
+      setSavedGameId(id);
       setGame({ id, hostId: user.uid, players: [], status: 'lobby', round: 1, usedWordIds: [] } as Game);
     } catch (e) {
       setMessage('Failed to create game');
@@ -116,14 +121,52 @@ export default function App() {
     if (!user || !gameIdInput) return;
     setLoading(true);
     try {
-      await GameService.joinGame(gameIdInput.toUpperCase(), {
-        uid: user.uid,
-        name: user.displayName || 'Anonymous',
-        score: 0
-      });
-      setGame({ id: gameIdInput.toUpperCase(), hostId: '', players: [], status: 'lobby', round: 1, usedWordIds: [] } as Game);
+      const gameId = gameIdInput.toUpperCase();
+      const existingGame = await GameService.getGame(gameId);
+      if (!existingGame) {
+        setMessage('Room not found');
+        return;
+      }
+      const alreadyInGame = existingGame.players.some(p => p.uid === user.uid);
+      if (!alreadyInGame) {
+        await GameService.joinGame(gameId, {
+          uid: user.uid,
+          name: user.displayName || 'Anonymous',
+          score: 0
+        });
+      }
+      localStorage.setItem(LAST_GAME_KEY, gameId);
+      setSavedGameId(gameId);
+      setGame(existingGame);
     } catch (e) {
       setMessage('Failed to join game');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejoinGame = async (gameId: string) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const existingGame = await GameService.getGame(gameId);
+      if (!existingGame || existingGame.status === 'ended') {
+        localStorage.removeItem(LAST_GAME_KEY);
+        setSavedGameId(null);
+        setMessage(existingGame ? 'That game has already ended' : 'Room no longer exists');
+        return;
+      }
+      const alreadyInGame = existingGame.players.some(p => p.uid === user.uid);
+      if (!alreadyInGame) {
+        await GameService.joinGame(gameId, {
+          uid: user.uid,
+          name: user.displayName || 'Anonymous',
+          score: 0
+        });
+      }
+      setGame(existingGame);
+    } catch (e) {
+      setMessage('Failed to rejoin game');
     } finally {
       setLoading(false);
     }
@@ -204,7 +247,7 @@ export default function App() {
     await GameService.setStatus(game.id, nextStatuses[game.status]);
   };
 
-  if (!user) {
+  if (!user || !user.displayName) {
     return (
       <div className="min-h-screen bg-natural-bg flex items-center justify-center p-6 font-sans">
         <motion.div 
@@ -309,9 +352,14 @@ export default function App() {
                     </div>
                     <span className={`text-sm ${p.uid === user.uid ? 'font-bold' : 'font-medium'}`}>{p.name} {p.uid === user.uid && '(You)'}</span>
                   </div>
-                  {bluffs.some(b => b.userId === p.uid && !b.isReal) && (
-                    <div className="w-2 h-2 rounded-full bg-natural-emerald"></div>
-                  )}
+                  {game?.status === 'voting'
+                    ? bluffs.some(b => b.votes.includes(p.uid))
+                      ? <div className="w-2 h-2 rounded-full bg-natural-emerald" title="Voted" />
+                      : <div className="w-2 h-2 rounded-full bg-stone-300 animate-pulse" title="Waiting to vote" />
+                    : bluffs.some(b => b.userId === p.uid && !b.isReal) && (
+                      <div className="w-2 h-2 rounded-full bg-natural-emerald"></div>
+                    )
+                  }
                 </div>
               ))}
             </div>
@@ -340,6 +388,34 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="grid sm:grid-cols-2 gap-8 h-full"
             >
+              {savedGameId && (
+                <div className="sm:col-span-2 glass rounded-[32px] p-6 border-b-4 border-natural-emerald/30 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-natural-emerald-dark/10 rounded-2xl flex items-center justify-center">
+                      <Hash className="w-6 h-6 text-natural-emerald-dark" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">Previous Session</p>
+                      <p className="font-bold text-stone-800">Room <span className="font-mono tracking-widest">{savedGameId}</span></p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleRejoinGame(savedGameId)}
+                      disabled={loading}
+                      className="bg-natural-emerald-dark text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-emerald-800 transition-all disabled:opacity-50"
+                    >
+                      {loading ? 'Rejoining...' : 'Rejoin Room'}
+                    </button>
+                    <button
+                      onClick={() => { localStorage.removeItem(LAST_GAME_KEY); setSavedGameId(null); }}
+                      className="bg-stone-100 text-stone-500 px-4 py-3 rounded-xl font-bold text-sm hover:bg-stone-200 transition-all"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="glass p-8 rounded-[32px] flex flex-col items-center text-center justify-center border-b-4 border-stone-200">
                 <div className="w-16 h-16 bg-stone-100 rounded-2xl flex items-center justify-center text-stone-500 mb-6">
                   <Play className="w-8 h-8" />
@@ -493,6 +569,15 @@ export default function App() {
                       <span className="text-[10px] uppercase font-bold text-stone-400 tracking-[0.3em] mb-4">Voting Phase</span>
                       <h2 className="text-5xl font-bold serif text-stone-800 lowercase underline decoration-stone-200 underline-offset-8 mb-4">{game.word}</h2>
                       <p className="text-stone-500 italic">One of these is the truth. The others are traps.</p>
+                      {(() => {
+                        const votedCount = new Set(bluffs.flatMap(b => b.votes)).size;
+                        const total = game.players.length;
+                        return votedCount > 0 && (
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400 mt-3">
+                            {votedCount} / {total} voted
+                          </p>
+                        );
+                      })()}
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
@@ -520,13 +605,53 @@ export default function App() {
                       ))}
                     </div>
 
-                    {game.hostId === user.uid && (
-                      <div className="text-center mt-auto pt-8">
-                        <button onClick={handleNextPhase} className="bg-stone-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg">
-                          Reveal the Truth
-                        </button>
-                      </div>
-                    )}
+                    {game.hostId === user.uid && (() => {
+                      const votedUids = new Set(bluffs.flatMap(b => b.votes));
+                      const waiting = game.players.filter(p => !votedUids.has(p.uid));
+                      const allVoted = waiting.length === 0;
+                      return (
+                        <div className="mt-auto pt-8 border-t border-stone-100 flex flex-col items-center gap-5">
+                          {/* Per-player vote status */}
+                          <div className="flex flex-col items-center gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Vote Status</p>
+                            <div className="flex flex-wrap justify-center gap-2">
+                              {game.players.map(p => {
+                                const voted = votedUids.has(p.uid);
+                                return (
+                                  <div key={p.uid} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                                    voted ? 'bg-natural-emerald/10 text-natural-emerald-dark' : 'bg-stone-100 text-stone-400'
+                                  }`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                      voted ? 'bg-natural-emerald-dark' : 'bg-stone-300 animate-pulse'
+                                    }`} />
+                                    {p.name}
+                                    {voted ? <CheckCircle2 className="w-3 h-3 ml-0.5" /> : <span className="opacity-50 ml-0.5">…</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {/* Gated reveal button */}
+                          <div className="flex flex-col items-center gap-2">
+                            <button
+                              onClick={handleNextPhase}
+                              disabled={!allVoted}
+                              className="bg-stone-800 text-white px-8 py-3 rounded-xl font-bold shadow-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-stone-700 transition-colors"
+                            >
+                              Reveal the Truth
+                            </button>
+                            {!allVoted && (
+                              <button
+                                onClick={handleNextPhase}
+                                className="text-stone-400 hover:text-stone-600 transition-colors text-[10px] font-bold uppercase tracking-widest"
+                              >
+                                Force reveal ({waiting.length} still voting)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -654,7 +779,7 @@ export default function App() {
                           </button>
                         )}
                         <button
-                          onClick={() => setGame(null)}
+                          onClick={() => { localStorage.removeItem(LAST_GAME_KEY); setSavedGameId(null); setGame(null); }}
                           className="bg-stone-100 text-stone-600 px-8 py-4 rounded-2xl font-bold hover:bg-stone-200 transition-all"
                         >
                           Leave Game
