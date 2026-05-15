@@ -23,6 +23,7 @@ export default function App() {
   const [bluffs, setBluffs] = useState<Bluff[]>([]);
   const [gameIdInput, setGameIdInput] = useState('');
   const [myBluff, setMyBluff] = useState('');
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -41,17 +42,19 @@ export default function App() {
         }
       });
 
+      return () => unsubGame();
+    }
+  }, [game?.id]);
+
+  useEffect(() => {
+    if (game?.id && game?.status && game.status !== 'writing') {
       const unsubBluffs = onSnapshot(collection(db, 'games', game.id, 'bluffs'), (snap) => {
         const b = snap.docs.map(d => ({ id: d.id, ...d.data() } as Bluff));
         setBluffs(b);
       });
-
-      return () => {
-        unsubGame();
-        unsubBluffs();
-      };
+      return () => unsubBluffs();
     }
-  }, [game?.id]);
+  }, [game?.id, game?.status]);
 
   useEffect(() => {
     if (game?.status === 'voting' && shuffledBluffs.length === 0) {
@@ -112,7 +115,9 @@ export default function App() {
       const { word, definition } = await GameService.getRandomWord(game.id);
       await GameService.startGame(game.id, word, definition);
       setMyBluff('');
+      setHasSubmitted(false);
       setHasVoted(false);
+      setBluffs([]);
     } catch (e) {
       console.error('Error starting round:', e);
       setMessage('Error starting round');
@@ -124,6 +129,7 @@ export default function App() {
   const handleSubmitBluff = async () => {
     if (!game || !myBluff) return;
     await GameService.submitBluff(game.id, user!.uid, user!.displayName || 'Anonymous', myBluff);
+    setHasSubmitted(true);
   };
 
   const handleVote = async (bluffId: string) => {
@@ -356,7 +362,7 @@ export default function App() {
                       <h1 className="text-5xl md:text-7xl font-bold serif text-stone-800 lowercase underline decoration-stone-200 underline-offset-8 decoration-4">{game.word}</h1>
                     </div>
 
-                    {bluffs.find(b => b.userId === user.uid && !b.isReal) ? (
+                    {hasSubmitted ? (
                       <div className="bg-stone-50 p-12 rounded-[40px] text-center border-2 border-dashed border-stone-200 w-full max-w-lg">
                         <div className="w-16 h-16 bg-natural-emerald-dark/10 text-natural-emerald-dark rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle2 className="w-8 h-8" />
