@@ -114,6 +114,7 @@ export default function App() {
       setMyBluff('');
       setHasVoted(false);
     } catch (e) {
+      console.error('Error starting round:', e);
       setMessage('Error starting round');
     } finally {
       setLoading(false);

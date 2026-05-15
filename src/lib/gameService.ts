@@ -54,6 +54,7 @@ export const GameService = {
       status: 'lobby',
       round: 1,
       players: [{ uid: hostId, name: hostName, score: 0 }],
+      usedWordIds: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
