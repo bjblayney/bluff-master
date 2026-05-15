@@ -139,6 +139,42 @@ export const GameService = {
     }
   },
 
+  async updateScores(gameId: string, bluffs: Bluff[], players: Player[]): Promise<void> {
+    // +1 for each person you fooled with your fake bluff
+    // +2 for voting for the real definition
+    const realBluff = bluffs.find(b => b.isReal);
+    const scoreDelta: Record<string, number> = {};
+
+    for (const bluff of bluffs) {
+      if (bluff.isReal) continue;
+      for (const voterUid of bluff.votes) {
+        // Person whose bluff received a vote gets +1
+        scoreDelta[bluff.userId] = (scoreDelta[bluff.userId] ?? 0) + 1;
+      }
+    }
+
+    if (realBluff) {
+      for (const voterUid of realBluff.votes) {
+        // Person who guessed the real definition gets +2
+        scoreDelta[voterUid] = (scoreDelta[voterUid] ?? 0) + 2;
+      }
+    }
+
+    const updatedPlayers = players.map(p => ({
+      ...p,
+      score: p.score + (scoreDelta[p.uid] ?? 0),
+    }));
+
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        players: updatedPlayers,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);
+    }
+  },
+
   async resetBluffs(gameId: string): Promise<void> {
     try {
       const bluffsSnap = await getDocs(collection(db, 'games', gameId, 'bluffs'));

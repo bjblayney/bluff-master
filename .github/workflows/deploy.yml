@@ -37,7 +37,7 @@ jobs:
           python3 -c "import os; open('/tmp/gcp-sa.json','w').write(os.environ['SA_JSON'])"
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-sa.json \
             ./node_modules/.bin/firebase deploy \
-              --only hosting,firestore:rules \
+              --only hosting,firestore \
               --project gen-lang-client-0840619712 \
               --non-interactive
           rm /tmp/gcp-sa.json

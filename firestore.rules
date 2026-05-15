@@ -50,7 +50,7 @@ service cloud.firestore {
          incoming().players.size() > existing().players.size()) ||
         // Action: Host Control (Status/Word/Round/UsedWords)
         (existing().hostId == request.auth.uid && 
-         incoming().diff(existing()).affectedKeys().hasAny(['status', 'word', 'definition', 'round', 'usedWordIds', 'updatedAt']))
+         incoming().diff(existing()).affectedKeys().hasAny(['status', 'word', 'definition', 'round', 'usedWordIds', 'players', 'updatedAt']))
       );
     }
 

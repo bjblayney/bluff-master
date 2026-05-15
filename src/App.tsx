@@ -47,14 +47,18 @@ export default function App() {
   }, [game?.id]);
 
   useEffect(() => {
-    if (game?.id && game?.status && game.status !== 'writing') {
-      const unsubBluffs = onSnapshot(collection(db, 'games', game.id, 'bluffs'), (snap) => {
-        const b = snap.docs.map(d => ({ id: d.id, ...d.data() } as Bluff));
-        setBluffs(b);
-      });
-      return () => unsubBluffs();
-    }
-  }, [game?.id, game?.status]);
+    if (!game?.id || !game?.status) return;
+    // During writing: only the host needs the bluffs listener (for submission count + force-close).
+    // Non-host players track their own submission via local hasSubmitted state.
+    const isHost = user?.uid === game.hostId;
+    if (game.status === 'writing' && !isHost) return;
+
+    const unsubBluffs = onSnapshot(collection(db, 'games', game.id, 'bluffs'), (snap) => {
+      const b = snap.docs.map(d => ({ id: d.id, ...d.data() } as Bluff));
+      setBluffs(b);
+    });
+    return () => unsubBluffs();
+  }, [game?.id, game?.status, user?.uid]);
 
   useEffect(() => {
     if (game?.status === 'voting' && shuffledBluffs.length === 0) {
@@ -140,11 +144,14 @@ export default function App() {
 
   const handleNextPhase = async () => {
     if (!game) return;
-    const nextStatuses: Record<string, any> = {
+    const nextStatuses: Record<string, GameStatus> = {
       'writing': 'voting',
       'voting': 'results',
       'results': 'lobby'
     };
+    if (game.status === 'voting') {
+      await GameService.updateScores(game.id, bluffs, game.players);
+    }
     await GameService.setStatus(game.id, nextStatuses[game.status]);
   };
 
