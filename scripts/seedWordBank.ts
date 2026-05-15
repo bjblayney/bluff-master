@@ -1,4 +1,5 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -14,13 +15,12 @@ if (!serviceAccountJson) {
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
+initializeApp({
+  credential: cert(JSON.parse(serviceAccountJson)),
 });
 
-const db = admin.firestore();
 // Target the named Firestore database for this project
-db.settings({ databaseId: 'ai-studio-ba922d2a-cccb-45d3-ae09-bdd4dc13ad38' });
+const db = getFirestore('ai-studio-ba922d2a-cccb-45d3-ae09-bdd4dc13ad38');
 
 const wordBank: WordEntry[] = JSON.parse(
   readFileSync(resolve('src/data/wordBank.json'), 'utf-8')
