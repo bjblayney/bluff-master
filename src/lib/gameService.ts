@@ -11,7 +11,8 @@ import {
   serverTimestamp,
   arrayUnion,
   addDoc,
-  deleteDoc
+  deleteDoc,
+  increment
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -32,6 +33,7 @@ export interface Game {
   round: number;
   players: Player[];
   usedWordIds: string[];
+  totalRounds?: number;
   createdAt: any;
   updatedAt: any;
 }
@@ -215,5 +217,41 @@ export const GameService = {
     });
 
     return { word: chosen.word, definition: chosen.definition };
+  },
+
+  async setTotalRounds(gameId: string, totalRounds: number): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        totalRounds,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);
+    }
+  },
+
+  async incrementRound(gameId: string): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        round: increment(1),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);
+    }
+  },
+
+  async resetGame(gameId: string, players: Player[]): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        status: 'lobby',
+        round: 1,
+        players,
+        usedWordIds: [],
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);
+    }
   }
 };

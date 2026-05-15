@@ -27,6 +27,7 @@ export default function App() {
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [selectedRounds, setSelectedRounds] = useState<1 | 3 | 5 | 10 | 15>(10);
 
   useEffect(() => {
     return auth.onAuthStateChanged((u) => setUser(u));
@@ -132,8 +133,22 @@ export default function App() {
     if (!game) return;
     setLoading(true);
     try {
+      // If coming from results phase, check if this was the last round
+      if (game.status === 'results' && game.totalRounds && game.round >= game.totalRounds) {
+        await GameService.setStatus(game.id, 'ended');
+        setLoading(false);
+        return;
+      }
+
       await GameService.resetBluffs(game.id);
       const { word, definition } = await GameService.getRandomWord(game.id);
+
+      if (game.status === 'lobby') {
+        await GameService.setTotalRounds(game.id, selectedRounds);
+      } else if (game.status === 'results') {
+        await GameService.incrementRound(game.id);
+      }
+
       await GameService.startGame(game.id, word, definition);
       setMyBluff('');
       setHasSubmitted(false);
@@ -142,6 +157,23 @@ export default function App() {
     } catch (e) {
       console.error('Error starting round:', e);
       setMessage('Error starting round');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePlayAgain = async () => {
+    if (!game) return;
+    setLoading(true);
+    try {
+      const resetPlayers = game.players.map(p => ({ ...p, score: 0 }));
+      await GameService.resetGame(game.id, resetPlayers);
+      setBluffs([]);
+      setHasSubmitted(false);
+      setHasVoted(false);
+      setMyBluff('');
+    } catch (e) {
+      setMessage('Failed to reset game');
     } finally {
       setLoading(false);
     }
@@ -233,6 +265,15 @@ export default function App() {
                 <p className="font-bold text-sm capitalize">{game.status}</p>
               </div>
               <div className="h-8 w-px bg-stone-200"></div>
+              {game.totalRounds && (
+                <>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Round</p>
+                    <p className="font-bold text-sm">{game.round} / {game.totalRounds}</p>
+                  </div>
+                  <div className="h-8 w-px bg-stone-200"></div>
+                </>
+              )}
               <div className="text-center">
                 <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Players</p>
                 <p className="font-bold text-sm">{game.players.length}</p>
@@ -366,14 +407,34 @@ export default function App() {
                     </div>
 
                     {game.hostId === user.uid && (
-                      <button 
-                        onClick={handleStartRound}
-                        disabled={loading || game.players.length < 1}
-                        className="bg-natural-emerald-dark text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-900/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                        id="start-game-button"
-                      >
-                        Start Round
-                      </button>
+                      <div className="flex flex-col items-center gap-6">
+                        <div className="flex flex-col items-center gap-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Number of Rounds</p>
+                          <div className="flex gap-2">
+                            {([1, 3, 5, 10, 15] as const).map(n => (
+                              <button
+                                key={n}
+                                onClick={() => setSelectedRounds(n)}
+                                className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
+                                  selectedRounds === n
+                                    ? 'bg-stone-800 text-white shadow-lg'
+                                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button 
+                          onClick={handleStartRound}
+                          disabled={loading || game.players.length < 1}
+                          className="bg-natural-emerald-dark text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-900/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                          id="start-game-button"
+                        >
+                          {loading ? 'Starting...' : 'Start Round 1'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -508,15 +569,100 @@ export default function App() {
                       <div className="text-center mt-auto pt-10">
                          <button 
                           onClick={handleStartRound}
-                          className="bg-stone-800 text-white px-12 py-4 rounded-2xl font-bold shadow-xl shadow-stone-900/20 hover:scale-105 active:scale-95 transition-all font-sans"
+                          disabled={loading}
+                          className="bg-stone-800 text-white px-12 py-4 rounded-2xl font-bold shadow-xl shadow-stone-900/20 hover:scale-105 active:scale-95 transition-all font-sans disabled:opacity-50"
                           id="next-round-button"
                         >
-                          Prepare Next Round
+                          {loading ? 'Loading...' : (game.totalRounds && game.round >= game.totalRounds ? 'View Final Scores' : 'Prepare Next Round')}
                         </button>
                       </div>
                     )}
                   </div>
                 )}
+
+                {game.status === 'ended' && (() => {
+                  const sorted = [...game.players].sort((a, b) => b.score - a.score);
+                  const podium = [sorted[1], sorted[0], sorted[2]];
+                  const medals = ['🥈', '🥇', '🥉'];
+                  const podiumHeights = ['h-28', 'h-36', 'h-24'];
+                  return (
+                    <div className="flex-1 flex flex-col items-center gap-10 py-12">
+                      <div className="text-center">
+                        <span className="text-[10px] uppercase font-bold text-stone-400 tracking-[0.3em] mb-4 block">Final Results</span>
+                        <div className="flex items-center justify-center gap-3 mb-2">
+                          <Trophy className="w-9 h-9 text-amber-500" />
+                          <h1 className="text-5xl font-bold serif text-stone-800">Game Over</h1>
+                          <Trophy className="w-9 h-9 text-amber-500" />
+                        </div>
+                        <p className="text-stone-500 italic text-sm mt-2">
+                          {game.totalRounds} rounds of deception complete
+                        </p>
+                      </div>
+
+                      {/* Podium — 2nd / 1st / 3rd layout */}
+                      <div className="flex items-end justify-center gap-3 w-full max-w-sm">
+                        {podium.map((p, i) => p ? (
+                          <div
+                            key={p.uid}
+                            className={`flex-1 flex flex-col items-center justify-end glass rounded-[24px] px-3 py-4 ${podiumHeights[i]} ${
+                              i === 1
+                                ? 'border-2 border-amber-300/60 shadow-xl shadow-amber-500/10'
+                                : 'border border-stone-200'
+                            }`}
+                          >
+                            <span className="text-2xl mb-1">{medals[i]}</span>
+                            <p className={`font-bold text-xs text-center truncate w-full leading-tight ${i === 1 ? 'text-stone-800' : 'text-stone-500'}`}>
+                              {p.name}
+                            </p>
+                            <p className={`font-black text-xl mt-1 ${i === 1 ? 'text-amber-600' : 'text-stone-400'}`}>
+                              {p.score}
+                            </p>
+                          </div>
+                        ) : <div key={i} className="flex-1" />)}
+                      </div>
+
+                      {/* Full scoresheet */}
+                      <div className="w-full max-w-md glass rounded-[32px] p-6">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-4">Full Scoresheet</p>
+                        <div className="space-y-2">
+                          {sorted.map((p, i) => (
+                            <div
+                              key={p.uid}
+                              className={`flex items-center gap-4 p-3 rounded-2xl ${p.uid === user.uid ? 'bg-white/70 border border-stone-200' : ''}`}
+                            >
+                              <span className="w-5 text-center text-sm font-black text-stone-400">{i + 1}</span>
+                              <span className="flex-1 font-medium text-stone-700">
+                                {p.name}
+                                {p.uid === user.uid && <span className="text-[10px] text-stone-400 ml-1">(You)</span>}
+                                {p.uid === game.hostId && <span className="ml-1">👑</span>}
+                              </span>
+                              <span className="font-black text-stone-800 tabular-nums">{p.score}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-4 flex-wrap justify-center">
+                        {game.hostId === user.uid && (
+                          <button
+                            onClick={handlePlayAgain}
+                            disabled={loading}
+                            className="bg-natural-emerald-dark text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-900/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            {loading ? 'Resetting...' : 'Play Again'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setGame(null)}
+                          className="bg-stone-100 text-stone-600 px-8 py-4 rounded-2xl font-bold hover:bg-stone-200 transition-all"
+                        >
+                          Leave Game
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
