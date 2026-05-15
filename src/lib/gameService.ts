@@ -80,7 +80,14 @@ export const GameService = {
 
   async startGame(gameId: string, word: string, definition: string): Promise<void> {
     try {
-      // Add the real definition as a system bluff first
+      // Set status to 'writing' first — the bluff create rule requires status == 'writing'
+      await updateDoc(doc(db, 'games', gameId), {
+        status: 'writing',
+        word,
+        definition,
+        updatedAt: serverTimestamp()
+      });
+
       await addDoc(collection(db, 'games', gameId, 'bluffs'), {
         gameId,
         userId: 'SYSTEM',
@@ -88,13 +95,6 @@ export const GameService = {
         text: definition,
         votes: [],
         isReal: true
-      });
-
-      await updateDoc(doc(db, 'games', gameId), {
-        status: 'writing',
-        word,
-        definition,
-        updatedAt: serverTimestamp()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);

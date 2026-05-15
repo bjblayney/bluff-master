@@ -61,8 +61,9 @@ service cloud.firestore {
       }
 
       allow read: if isSignedIn() && (
-        getGame().status == 'voting' || getGame().status == 'results' || getGame().status == 'ended' ||
-        (getGame().status == 'writing' && isOwner(bluffId))
+        getGame().status != 'writing' ||
+        isOwner(bluffId) ||
+        getGame().hostId == request.auth.uid
       );
 
       allow create: if isSignedIn() && 

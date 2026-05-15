@@ -11,13 +11,14 @@ import {
   AlertCircle,
   MessageSquare
 } from 'lucide-react';
-import { auth, signInWithGoogle } from './lib/firebase';
+import { auth, signInAnon } from './lib/firebase';
 import { GameService, Game, Bluff, Player } from './lib/gameService';
 import { onSnapshot, doc, collection, query } from 'firebase/firestore';
 import { db } from './lib/firebase';
 
 export default function App() {
   const [user, setUser] = useState(auth.currentUser);
+  const [nameInput, setNameInput] = useState('');
   const [game, setGame] = useState<Game | null>(null);
   const [bluffs, setBluffs] = useState<Bluff[]>([]);
   const [gameIdInput, setGameIdInput] = useState('');
@@ -61,10 +62,15 @@ export default function App() {
   }, [game?.status, bluffs.length]);
 
   const handleLogin = async () => {
+    if (!nameInput.trim()) return;
+    setLoading(true);
     try {
-      await signInWithGoogle();
+      const u = await signInAnon(nameInput.trim());
+      setUser(u);
     } catch (e) {
       setMessage('Failed to sign in');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,7 +79,7 @@ export default function App() {
     setLoading(true);
     try {
       const id = await GameService.createGame(user.uid, user.displayName || 'Anonymous');
-      setGame({ id } as Game);
+      setGame({ id, hostId: user.uid, players: [], status: 'lobby', round: 1, usedWordIds: [] } as Game);
     } catch (e) {
       setMessage('Failed to create game');
     } finally {
@@ -90,7 +96,7 @@ export default function App() {
         name: user.displayName || 'Anonymous',
         score: 0
       });
-      setGame({ id: gameIdInput.toUpperCase() } as Game);
+      setGame({ id: gameIdInput.toUpperCase(), hostId: '', players: [], status: 'lobby', round: 1, usedWordIds: [] } as Game);
     } catch (e) {
       setMessage('Failed to join game');
     } finally {
@@ -155,12 +161,22 @@ export default function App() {
             </p>
           </div>
 
+          <input
+            type="text"
+            placeholder="Enter your name to play"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+            maxLength={30}
+            className="w-full bg-stone-100 rounded-2xl px-4 py-3 mb-4 text-center font-medium outline-none focus:ring-2 focus:ring-stone-300"
+          />
           <button 
             onClick={handleLogin}
-            className="w-full bg-stone-800 text-white rounded-2xl py-4 font-semibold flex items-center justify-center gap-2 hover:bg-stone-700 transition-colors shadow-lg shadow-stone-800/10"
+            disabled={!nameInput.trim() || loading}
+            className="w-full bg-stone-800 text-white rounded-2xl py-4 font-semibold flex items-center justify-center gap-2 hover:bg-stone-700 transition-colors shadow-lg shadow-stone-800/10 disabled:opacity-40"
             id="login-button"
           >
-            Sign in with Google to Play
+            {loading ? 'Joining...' : 'Enter the Room'}
           </button>
         </motion.div>
       </div>
