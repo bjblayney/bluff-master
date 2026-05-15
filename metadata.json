@@ -1,0 +1,6 @@
+{
+  "name": "Bluff Master",
+  "description": "A real-time multiplayer word-bluffing game where players submit fake definitions for obscure words and vote for the truth.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "isOnline": { "type": "boolean" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "Game session state",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["lobby", "writing", "voting", "results", "ended"]
+        },
+        "word": { "type": "string" },
+        "definition": { "type": "string" },
+        "round": { "type": "integer" },
+        "players": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uid": { "type": "string" },
+              "name": { "type": "string" },
+              "score": { "type": "integer" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hostId", "status", "createdAt"]
+    },
+    "Bluff": {
+      "title": "Bluff",
+      "description": "A player's submitted bluff or the real definition",
+      "type": "object",
+      "properties": {
+        "gameId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "votes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isReal": { "type": "boolean" }
+      },
+      "required": ["gameId", "userId", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/games/{gameId}": {
+      "schema": "Game",
+      "description": "Game sessions"
+    },
+    "/games/{gameId}/bluffs/{bluffId}": {
+      "schema": "Bluff",
+      "description": "Submitted bluffs for a game"
+    }
+  }
+}

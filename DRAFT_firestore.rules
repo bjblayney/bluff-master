@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId) && 
+        incoming().keys().hasAll(['uid', 'displayName']) &&
+        incoming().uid == userId &&
+        incoming().displayName is string && incoming().displayName.size() <= 50;
+    }
+
+    // --- Games ---
+    match /games/{gameId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(gameId) &&
+        incoming().hostId == request.auth.uid &&
+        incoming().status == 'lobby' &&
+        incoming().createdAt == request.time;
+      
+      allow update: if isSignedIn() && (
+        // Action: Join
+        (incoming().diff(existing()).affectedKeys().hasOnly(['players', 'updatedAt']) && 
+         incoming().players.size() > existing().players.size()) ||
+        // Action: Host Control (Status/Word)
+        (existing().hostId == request.auth.uid && 
+         incoming().diff(existing()).affectedKeys().hasAny(['status', 'word', 'definition', 'round', 'updatedAt']))
+      );
+    }
+
+    // --- Bluffs ---
+    match /games/{gameId}/bluffs/{bluffId} {
+      function getGame() {
+        return get(/databases/$(database)/documents/games/$(gameId)).data;
+      }
+
+      allow read: if isSignedIn() && (
+        getGame().status == 'voting' || getGame().status == 'results' || getGame().status == 'ended' ||
+        (getGame().status == 'writing' && isOwner(bluffId))
+      );
+
+      allow create: if isSignedIn() && 
+        incoming().gameId == gameId &&
+        (
+          // Player submitting their own bluff
+          (isOwner(bluffId) && incoming().userId == request.auth.uid && !incoming().isReal) ||
+          // Host submitting the real definition
+          (getGame().hostId == request.auth.uid && incoming().userId == 'SYSTEM' && incoming().isReal)
+        ) &&
+        getGame().status == 'writing' &&
+        incoming().text is string && incoming().text.size() <= 1000 &&
+        incoming().votes.size() == 0;
+
+      allow update: if isSignedIn() &&
+        getGame().status == 'voting' &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['votes']) &&
+        incoming().votes.size() == existing().votes.size() + 1 &&
+        !(request.auth.uid in existing().votes) &&
+        request.auth.uid != existing().userId;
+
+      allow delete: if isSignedIn() && getGame().hostId == request.auth.uid;
+    }
+  }
+}
