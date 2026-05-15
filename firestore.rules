@@ -60,11 +60,7 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/games/$(gameId)).data;
       }
 
-      allow read: if isSignedIn() && (
-        getGame().status != 'writing' ||
-        isOwner(bluffId) ||
-        getGame().hostId == request.auth.uid
-      );
+      allow read: if isSignedIn();
 
       allow create: if isSignedIn() && 
         incoming().gameId == gameId &&

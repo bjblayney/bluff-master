@@ -62,17 +62,27 @@ export default function App() {
 
   useEffect(() => {
     if (game?.status === 'voting' && bluffs.length > 0) {
-      if (shuffledBluffs.length === 0) {
-        // First load: shuffle
-        setShuffledBluffs([...bluffs].sort(() => Math.random() - 0.5));
-      } else {
-        // Subsequent updates (votes coming in): preserve order, refresh data
-        setShuffledBluffs(prev => prev.map(sb => bluffs.find(b => b.id === sb.id) ?? sb));
-      }
-    } else if (game?.status !== 'voting' && shuffledBluffs.length > 0) {
+      setShuffledBluffs(prev => {
+        if (prev.length === 0) {
+          return [...bluffs].sort(() => Math.random() - 0.5);
+        }
+        // Preserve shuffle order, sync live vote data
+        return prev.map(sb => bluffs.find(b => b.id === sb.id) ?? sb);
+      });
+    } else if (game?.status !== 'voting') {
       setShuffledBluffs([]);
     }
   }, [game?.status, bluffs]);
+
+  // Reset per-round client state for all players when a new word is dealt
+  useEffect(() => {
+    if (game?.word) {
+      setHasSubmitted(false);
+      setMyBluff('');
+      setHasVoted(false);
+      setBluffs([]);
+    }
+  }, [game?.word]);
 
   const handleLogin = async () => {
     if (!nameInput.trim()) return;
