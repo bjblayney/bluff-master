@@ -1,20 +1,65 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Bluff Master
 
-# Run and deploy your AI Studio app
+A real-time multiplayer word-bluffing game. Players are shown an obscure word and each submit a fake definition — then everyone votes to find the real one. Points go to whoever fools the most people.
 
-This contains everything you need to run your app locally.
+Built with React, Firebase (Auth + Firestore), and Vite. Deployed to Firebase Hosting via GitHub Actions.
 
-View your app in AI Studio: https://ai.studio/apps/ba922d2a-cccb-45d3-ae09-bdd4dc13ad38
+**Live:** https://gen-lang-client-0840619712.web.app
 
-## Run Locally
+---
 
-**Prerequisites:**  Node.js
+## Running locally
 
+**Prerequisites:** Node.js 20+
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+git clone https://github.com/bjblayney/bluff-master.git
+cd bluff-master
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. The app connects to the live Firebase project, so the word bank and auth work out of the box — no API keys needed for local dev.
+
+---
+
+## Adding or updating words
+
+The word bank lives in [`src/data/wordBank.json`](src/data/wordBank.json) as a plain array of `{ word, definition }` objects:
+
+```json
+{ "word": "Apricity", "definition": "The warmth of the sun in winter." }
+```
+
+To add new words:
+1. Edit `src/data/wordBank.json`
+2. Commit and push to `main`
+
+The CI/CD pipeline automatically seeds the updated list to Firestore on every push — no manual steps required.
+
+---
+
+## CI/CD pipeline
+
+Every push to `main` runs the following via GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)):
+
+1. **Seed word bank** — upserts all words from `wordBank.json` into the Firestore `wordBank` collection
+2. **Build** — compiles the Vite/React app
+3. **Deploy** — pushes the build to Firebase Hosting and updates Firestore security rules
+
+### Required GitHub secrets
+
+| Secret | Description |
+|--------|-------------|
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase service account JSON ([generate here](https://console.firebase.google.com/project/gen-lang-client-0840619712/settings/serviceaccounts/adminsdk)) |
+| `GEMINI_API_KEY` | Optional — not currently used by the app |
+
+---
+
+## Tech stack
+
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Motion
+- **Auth:** Firebase Auth (Google sign-in)
+- **Database:** Firestore (real-time game state + word bank)
+- **Hosting:** Firebase Hosting
+- **CI/CD:** GitHub Actions
