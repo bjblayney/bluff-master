@@ -20,8 +20,8 @@ _(none currently known — last tested May 14 2026 with 2-player session)_
 
 - [x] **End-game screen** — after a set number of rounds (configurable by host in lobby: 5/10/15), show a final scoreboard instead of returning to lobby
 - [ ] **Host transfer** — if host disconnects or leaves, promote the next player to host so the game can continue
-- [ ] **Rejoin flow** — if a player refreshes or closes the tab, let them re-enter their name and rejoin the same game using their previous UID (auth is anonymous so UID persists in the browser)
-- [ ] **Vote gating** — optionally prevent host from advancing to results until all players have voted (could be a lobby setting)
+- [x] **Rejoin flow** — returning users are auto-prompted to rejoin their last room; joining mid-game works for both new and returning players
+- [x] **Vote gating** — optionally prevent host from advancing to results until all players have voted (could be a lobby setting)
 - [ ] **Server-side score calculation** — move scoring out of the host client into a Cloud Function to prevent score manipulation and handle host-disconnect edge case
 
 ---

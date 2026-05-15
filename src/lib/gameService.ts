@@ -253,5 +253,16 @@ export const GameService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `games/${gameId}`);
     }
+  },
+
+  async getGame(gameId: string): Promise<Game | null> {
+    try {
+      const snap = await getDoc(doc(db, 'games', gameId));
+      if (!snap.exists()) return null;
+      return { id: snap.id, ...snap.data() } as Game;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `games/${gameId}`);
+      return null;
+    }
   }
 };
