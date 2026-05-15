@@ -61,12 +61,18 @@ export default function App() {
   }, [game?.id, game?.status, user?.uid]);
 
   useEffect(() => {
-    if (game?.status === 'voting' && shuffledBluffs.length === 0) {
-      setShuffledBluffs([...bluffs].sort(() => Math.random() - 0.5));
+    if (game?.status === 'voting' && bluffs.length > 0) {
+      if (shuffledBluffs.length === 0) {
+        // First load: shuffle
+        setShuffledBluffs([...bluffs].sort(() => Math.random() - 0.5));
+      } else {
+        // Subsequent updates (votes coming in): preserve order, refresh data
+        setShuffledBluffs(prev => prev.map(sb => bluffs.find(b => b.id === sb.id) ?? sb));
+      }
     } else if (game?.status !== 'voting' && shuffledBluffs.length > 0) {
       setShuffledBluffs([]);
     }
-  }, [game?.status, bluffs.length]);
+  }, [game?.status, bluffs]);
 
   const handleLogin = async () => {
     if (!nameInput.trim()) return;
