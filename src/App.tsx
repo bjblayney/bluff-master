@@ -63,10 +63,11 @@ export default function App() {
   useEffect(() => {
     if (game?.status === 'voting' && bluffs.length > 0) {
       setShuffledBluffs(prev => {
-        if (prev.length === 0) {
+        if (prev.length === 0 || prev.length !== bluffs.length) {
+          // Initial set OR bluffs count changed (server delivered more than cache) — re-shuffle
           return [...bluffs].sort(() => Math.random() - 0.5);
         }
-        // Preserve shuffle order, sync live vote data
+        // Same count: preserve order, sync live vote data
         return prev.map(sb => bluffs.find(b => b.id === sb.id) ?? sb);
       });
     } else if (game?.status !== 'voting') {
